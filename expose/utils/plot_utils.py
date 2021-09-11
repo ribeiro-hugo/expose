@@ -15,11 +15,11 @@
 # Contact: ps-license@tuebingen.mpg.de
 
 from typing import Union, NewType, List
-
+import os
 import sys
 import numpy as np
 import torch
-
+import PIL.Image as pil_img
 import matplotlib.cm as mpl_cm
 import matplotlib.colors as mpl_colors
 import trimesh
@@ -853,3 +853,158 @@ class HDRenderer(OverlayRenderer):
                 else:
                     output_imgs.append(color[:-1])
         return np.stack(output_imgs, axis=0)
+
+class MyRenderer():
+    def __init__(self, **kwargs):
+      self.nada = None
+
+    def render_mesh(self, mesh_trimesh, camera_center, camera_transl, focal_length, img_width, img_height):
+
+
+
+        material = pyrender.MetallicRoughnessMaterial(
+            metallicFactor=0.0,
+            alphaMode='OPAQUE',
+            baseColorFactor=(1.0, 1.0, 0.9, 1.0))
+
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        vertex_colors = np.loadtxt(os.path.join(script_dir, 'smplx_verts_colors.txt'))
+        mesh_new = trimesh.Trimesh(vertices=mesh_trimesh.vertices, faces=mesh_trimesh.faces, vertex_colors=vertex_colors)
+        mesh_new.vertex_colors = vertex_colors
+        print("mesh visual kind: %s" % mesh_new.visual.kind)
+
+        #mesh = pyrender.Mesh.from_points(out_mesh.vertices, colors=vertex_colors)
+
+        mesh = pyrender.Mesh.from_trimesh(mesh_new, smooth=False, wireframe=False)
+
+        scene = pyrender.Scene(bg_color=[1.0, 1.0, 1.0, 0.0],
+                              ambient_light=(0.3, 0.3, 0.3))
+        #scene = pyrender.Scene(bg_color=[0.0, 0.0, 0.0, 0.0])
+        scene.add(mesh, 'mesh')
+
+        camera_pose = np.eye(4)
+        camera_pose[:3, 3] = camera_transl
+
+        camera = pyrender.camera.IntrinsicsCamera(
+            fx=focal_length, fy=focal_length,
+            cx=camera_center[0], cy=camera_center[1])
+        scene.add(camera, pose=camera_pose)
+
+        light = pyrender.light.DirectionalLight()
+
+        scene.add(light)
+        r = pyrender.OffscreenRenderer(viewport_width=img_width,
+                                      viewport_height=img_height,
+                                      point_size=1.0)
+        color, _ = r.render(scene, flags=pyrender.RenderFlags.RGBA)
+        color = color.astype(np.float32) / 255.0
+
+        #output_img = color
+        #print(color.shape)
+        output_img = color[:, :, 0:3]
+        output_img = (output_img * 255).astype(np.uint8)
+
+        return output_img
+
+    @torch.no_grad()
+    def __call__(self,
+                 vertices: Tensor,
+                 faces: Union[Tensor, Array],
+                 focal_length: Union[Tensor, Array],
+                 camera_translation: Union[Tensor, Array],
+                 camera_center: Union[Tensor, Array],
+                 bg_imgs: Array,
+                 **kwargs):
+
+
+        if torch.is_tensor(vertices):
+            vertices = vertices.detach().cpu().numpy()
+        if torch.is_tensor(faces):
+            faces = faces.detach().cpu().numpy()
+        if torch.is_tensor(focal_length):
+            focal_length = focal_length.detach().cpu().numpy()
+        if torch.is_tensor(camera_translation):
+            camera_translation = camera_translation.detach().cpu().numpy()
+        if torch.is_tensor(camera_center):
+            camera_center = camera_center.detach().cpu().numpy()
+        batch_size = vertices.shape[0]
+
+        output_imgs = []
+        for bidx in range(batch_size):
+          
+            ###############################################################################
+            _, H, W = bg_imgs[bidx].shape
+            myvertices = vertices[bidx].squeeze()
+            out_mesh = trimesh.Trimesh(myvertices, faces, process=False)
+            rot = trimesh.transformations.rotation_matrix(np.radians(180), [1, 0, 0])
+            out_mesh.apply_transform(rot)
+
+            script_dir = os.path.dirname(os.path.realpath(__file__))
+            vertex_colors = np.loadtxt(os.path.join(script_dir, 'smplx_verts_colors.txt'))
+
+            meu_camera_center = camera_center[bidx].squeeze()
+            meu_camera_transl = camera_translation[bidx].squeeze()
+            # Equivalent to 180 degrees around the y-axis. Transforms the fit to
+            # OpenGL compatible coordinate system.
+            meu_camera_transl[0] *= -1.0
+            meu_focal_length = focal_length
+
+            output_img = self.render_mesh(out_mesh , meu_camera_center, meu_camera_transl, meu_focal_length, W, H)
+            #pil_img.fromarray(output_img).save('save.png')
+
+            output_imgs.append(output_img)
+            ###############################################################################
+
+            
+
+
+
+
+
+            
+            # # Update the renderer's viewport
+            # self.renderer.viewport_height = H
+            # self.renderer.viewport_width = W
+
+            # self.update_camera(
+            #     focal_length=focal_length[bidx],
+            #     translation=camera_translation[bidx],
+            #     center=camera_center[bidx],
+            # )
+            # self.update_mesh(
+            #     vertices[bidx], faces, body_color=body_color, deg=deg)
+
+            # flags = (pyrender.RenderFlags.RGBA |
+            #          pyrender.RenderFlags.SKIP_CULL_FACES)
+            # color, depth = self.renderer.render(self.scene, flags=flags)
+            # color = np.transpose(color, [2, 0, 1]).astype(np.float32) / 255.0
+            # color = np.clip(color, 0, 1)
+
+            # if render_bg:
+            #     if return_with_alpha:
+            #         valid_mask = (color[3] > 0)[np.newaxis]
+
+            #         if bg_imgs[bidx].shape[0] < 4:
+            #             curr_bg_img = np.concatenate(
+            #                 [bg_imgs[bidx],
+            #                  np.ones_like(bg_imgs[bidx, [0], :, :])
+            #                  ], axis=0)
+            #         else:
+            #             curr_bg_img = bg_imgs[bidx]
+
+            #         output_img = (color * valid_mask +
+            #                       (1 - valid_mask) * curr_bg_img)
+            #         output_imgs.append(np.clip(output_img, 0, 1))
+            #     else:
+            #         valid_mask = (color[3] > 0)[np.newaxis]
+
+            #         output_img = (color[:-1] * valid_mask +
+            #                       (1 - valid_mask) * bg_imgs[bidx])
+            #         output_imgs.append(np.clip(output_img, 0, 1))
+            # else:
+            #     if return_with_alpha:
+            #         output_imgs.append(color)
+            #     else:
+            #         output_imgs.append(color[:-1])
+        # return np.stack(output_imgs, axis=0)
+        return output_imgs
