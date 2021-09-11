@@ -459,6 +459,9 @@ def main(
         out_img_save_path = 'saved.png'
         output_img.save(out_img_save_path)
         print("saved rendered mesh to %s" % out_img_save_path)
+        
+        out_img['my_mesh'] = output_img
+        
         #################################################################################
 
         for deg in degrees:
@@ -537,7 +540,7 @@ def main(
                     ax.set_axis_off()
 
                 axes[0, 0].imshow(hd_imgs[idx])
-                axes[0, 1].imshow(out_img['rgb'][idx])
+                axes[0, 1].imshow(out_img['my_mesh'][idx])
                 axes[0, 2].imshow(out_img['hd_orig_overlay'][idx])
                 axes[0, 3].imshow(out_img['hd_overlay'][idx])
                 start = 4
