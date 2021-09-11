@@ -407,14 +407,17 @@ def main(
         my_out_img['my_overlay'] = my_overlays
 
         for idx in tqdm(range(len(body_targets)), 'Saving My images...'):
+            
+            #curr_out_path = osp.join(demo_output_folder, fname)
+            #os.makedirs(curr_out_path, exist_ok=True)
+            
+            os.makedirs(demo_output_folder, exist_ok=True)
             fname = body_targets[idx].get_field('fname')
-            curr_out_path = osp.join(demo_output_folder, fname)
-            os.makedirs(curr_out_path, exist_ok=True)
 
             if my_save_vis:
                 for name, curr_img in my_out_img.items():
                     pil_img.fromarray(curr_img[idx]).save(
-                        osp.join(curr_out_path, f'{name}.png'))
+                        osp.join(demo_output_folder, f'{name}_{fname}.png'))
         
         #################################################################################
 
