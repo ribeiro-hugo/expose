@@ -51,7 +51,7 @@ from expose.data.transforms import build_transforms
 from expose.models.smplx_net import SMPLXNet
 from expose.config import cfg
 from expose.config.cmd_parser import set_face_contour
-from expose.utils.plot_utils import HDRenderer
+from expose.utils.plot_utils import HDRenderer, MyRenderer
 
 rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
 resource.setrlimit(resource.RLIMIT_NOFILE, (rlimit[1], rlimit[1]))
@@ -61,52 +61,6 @@ Vec3d = o3d.utility.Vector3dVector
 Vec3i = o3d.utility.Vector3iVector
 
 
-
-def render_mesh(mesh_trimesh, camera_center, camera_transl, focal_length, img_width, img_height):
-
-
-
-    material = pyrender.MetallicRoughnessMaterial(
-        metallicFactor=0.0,
-        alphaMode='OPAQUE',
-        baseColorFactor=(1.0, 1.0, 0.9, 1.0))
-
-    script_dir = os.path.dirname(os.path.realpath(__file__))
-    vertex_colors = np.loadtxt(os.path.join(script_dir, 'smplx_verts_colors.txt'))
-    mesh_new = trimesh.Trimesh(vertices=mesh_trimesh.vertices, faces=mesh_trimesh.faces, vertex_colors=vertex_colors)
-    mesh_new.vertex_colors = vertex_colors
-    print("mesh visual kind: %s" % mesh_new.visual.kind)
-
-    #mesh = pyrender.Mesh.from_points(out_mesh.vertices, colors=vertex_colors)
-
-    mesh = pyrender.Mesh.from_trimesh(mesh_new, smooth=False, wireframe=False)
-
-    scene = pyrender.Scene(bg_color=[1.0, 1.0, 1.0, 0.0],
-                          ambient_light=(0.3, 0.3, 0.3))
-    #scene = pyrender.Scene(bg_color=[0.0, 0.0, 0.0, 0.0])
-    scene.add(mesh, 'mesh')
-
-    camera_pose = np.eye(4)
-    camera_pose[:3, 3] = camera_transl
-
-    camera = pyrender.camera.IntrinsicsCamera(
-        fx=focal_length, fy=focal_length,
-        cx=camera_center[0], cy=camera_center[1])
-    scene.add(camera, pose=camera_pose)
-
-    light = pyrender.light.DirectionalLight()
-
-    scene.add(light)
-    r = pyrender.OffscreenRenderer(viewport_width=img_width,
-                                  viewport_height=img_height,
-                                  point_size=1.0)
-    color, _ = r.render(scene, flags=pyrender.RenderFlags.RGBA)
-    color = color.astype(np.float32) / 255.0
-
-    output_img = color[:, :, 0:3]
-    output_img = (output_img * 255).astype(np.uint8)
-
-    return output_img
 
 def collate_fn(batch):
     output_dict = dict()
@@ -314,6 +268,12 @@ def main(
     render = save_vis or show
     body_crop_size = exp_cfg.get('datasets', {}).get('body', {}).get(
         'transforms').get('crop_size', 256)
+
+
+    
+    my_renderer = MyRenderer()
+
+
     if render:
         hd_renderer = HDRenderer(img_size=body_crop_size)
 
@@ -403,7 +363,7 @@ def main(
         if save_vis:
             bg_hd_imgs = np.transpose(hd_imgs, [0, 3, 1, 2])
             out_img['hd_imgs'] = bg_hd_imgs
-        if render:
+        if not render:
             # Render the initial predictions on the original image resolution
             hd_orig_overlays = hd_renderer(
                 model_vertices, faces,
@@ -416,7 +376,7 @@ def main(
             out_img['hd_orig_overlay'] = hd_orig_overlays
 
         # Render the overlays of the final prediction
-        if render:
+        if not render:
             hd_overlays = hd_renderer(
                 final_model_vertices,
                 faces,
@@ -430,37 +390,31 @@ def main(
             out_img['hd_overlay'] = hd_overlays
 
         ################################################################################
-        
-        myvertices = final_model_vertices.squeeze()
-        out_mesh = trimesh.Trimesh(myvertices, faces, process=False)
-        rot = trimesh.transformations.rotation_matrix(np.radians(180), [1, 0, 0])
-        out_mesh.apply_transform(rot)
+        my_out_img = OrderedDict()
+        my_save_vis = True
+        if my_save_vis:
+            bg_hd_imgs = np.transpose(hd_imgs, [0, 3, 1, 2])
+            #my_out_img['hd_imgs'] = bg_hd_imgs
 
-        script_dir = os.path.dirname(os.path.realpath(__file__))
-        vertex_colors = np.loadtxt(os.path.join(script_dir, 'smplx_verts_colors.txt'))
-        mesh_new = trimesh.Trimesh(vertices=out_mesh.vertices, faces=out_mesh.faces, vertex_colors=vertex_colors)
-        
-        mesh_new.vertex_colors = vertex_colors
+        my_overlays = my_renderer(
+          final_model_vertices,
+          faces,
+          focal_length=hd_params['focal_length_in_px'],
+          camera_translation=hd_params['transl'],
+          camera_center=hd_params['center'],
+          bg_imgs=bg_hd_imgs,
+        )
+        my_out_img['my_overlay'] = my_overlays
 
-        meu_camera_center = hd_params['center'].squeeze()
-        meu_camera_transl = hd_params['transl'].squeeze()
-        # Equivalent to 180 degrees around the y-axis. Transforms the fit to
-        # OpenGL compatible coordinate system.
-        meu_camera_transl[0] *= -1.0
-        meu_focal_length = hd_params['focal_length_in_px']
+        for idx in tqdm(range(len(body_targets)), 'Saving My images...'):
+            fname = body_targets[idx].get_field('fname')
+            curr_out_path = osp.join(demo_output_folder, fname)
+            os.makedirs(curr_out_path, exist_ok=True)
 
-        # input_img = bg_hd_imgs #.detach().cpu().numpy()
-        # input_img = pil_img.fromarray((input_img * 255).astype(np.uint8))
-        # input_img.save('input.png')
-        # print("saved input image")
-
-        output_img = render_mesh(out_mesh , meu_camera_center, meu_camera_transl, meu_focal_length, W, H)
-        output_img = pil_img.fromarray(output_img)
-        out_img_save_path = 'saved.png'
-        output_img.save(out_img_save_path)
-        print("saved rendered mesh to %s" % out_img_save_path)
-        
-        out_img['my_mesh'] = output_img
+            if my_save_vis:
+                for name, curr_img in my_out_img.items():
+                    pil_img.fromarray(curr_img[idx]).save(
+                        osp.join(curr_out_path, f'{name}.png'))
         
         #################################################################################
 
@@ -478,7 +432,7 @@ def main(
             )
             out_img[f'hd_rendering_{deg:03.0f}'] = hd_overlays
 
-        if save_vis:
+        if not save_vis:
             for key in out_img.keys():
                 out_img[key] = np.clip(
                     np.transpose(
@@ -490,7 +444,7 @@ def main(
             curr_out_path = osp.join(demo_output_folder, fname)
             os.makedirs(curr_out_path, exist_ok=True)
 
-            if save_vis:
+            if not save_vis:
                 for name, curr_img in out_img.items():
                     pil_img.fromarray(curr_img[idx]).save(
                         osp.join(curr_out_path, f'{name}.png'))
