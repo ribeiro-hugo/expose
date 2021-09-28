@@ -285,6 +285,8 @@ def main(
                 focal_length=hd_params['focal_length_in_px'],
                 camera_translation=hd_params['transl'],
                 camera_center=hd_params['center'],
+                render_bg=False,
+                bg_imgs=bg_hd_imgs,    
                 return_with_alpha=True,
                 body_color=[0.4, 0.4, 0.7]
             )
