@@ -13,8 +13,8 @@
 # for Intelligent Systems. All rights reserved.
 #
 # Contact: ps-license@tuebingen.mpg.de
-import pyrender
-import trimesh
+
+
 import sys
 import os
 import os.path as osp
@@ -51,7 +51,7 @@ from expose.data.transforms import build_transforms
 from expose.models.smplx_net import SMPLXNet
 from expose.config import cfg
 from expose.config.cmd_parser import set_face_contour
-from expose.utils.plot_utils import HDRenderer, MyRenderer
+from expose.utils.plot_utils import HDRenderer
 
 rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
 resource.setrlimit(resource.RLIMIT_NOFILE, (rlimit[1], rlimit[1]))
@@ -59,7 +59,6 @@ resource.setrlimit(resource.RLIMIT_NOFILE, (rlimit[1], rlimit[1]))
 
 Vec3d = o3d.utility.Vector3dVector
 Vec3i = o3d.utility.Vector3iVector
-
 
 
 def collate_fn(batch):
@@ -268,12 +267,6 @@ def main(
     render = save_vis or show
     body_crop_size = exp_cfg.get('datasets', {}).get('body', {}).get(
         'transforms').get('crop_size', 256)
-
-
-    
-    my_renderer = MyRenderer()
-
-
     if render:
         hd_renderer = HDRenderer(img_size=body_crop_size)
 
@@ -363,7 +356,7 @@ def main(
         if save_vis:
             bg_hd_imgs = np.transpose(hd_imgs, [0, 3, 1, 2])
             out_img['hd_imgs'] = bg_hd_imgs
-        if not render:
+        if render:
             # Render the initial predictions on the original image resolution
             hd_orig_overlays = hd_renderer(
                 model_vertices, faces,
@@ -376,7 +369,7 @@ def main(
             out_img['hd_orig_overlay'] = hd_orig_overlays
 
         # Render the overlays of the final prediction
-        if not render:
+        if render:
             hd_overlays = hd_renderer(
                 final_model_vertices,
                 faces,
@@ -388,38 +381,6 @@ def main(
                 body_color=[0.4, 0.4, 0.7]
             )
             out_img['hd_overlay'] = hd_overlays
-
-        ################################################################################
-        my_out_img = OrderedDict()
-        my_save_vis = True
-        if my_save_vis:
-            bg_hd_imgs = np.transpose(hd_imgs, [0, 3, 1, 2])
-            #my_out_img['hd_imgs'] = bg_hd_imgs
-
-        my_overlays = my_renderer(
-          final_model_vertices,
-          faces,
-          focal_length=hd_params['focal_length_in_px'],
-          camera_translation=hd_params['transl'],
-          camera_center=hd_params['center'],
-          bg_imgs=bg_hd_imgs,
-        )
-        my_out_img['my_overlay'] = my_overlays
-
-        for idx in tqdm(range(len(body_targets)), 'Saving My images...'):
-            
-            #curr_out_path = osp.join(demo_output_folder, fname)
-            #os.makedirs(curr_out_path, exist_ok=True)
-            
-            os.makedirs(demo_output_folder, exist_ok=True)
-            fname = body_targets[idx].get_field('fname')
-
-            if my_save_vis:
-                for name, curr_img in my_out_img.items():
-                    pil_img.fromarray(curr_img[idx]).save(
-                        osp.join(demo_output_folder, f'{name}_{fname}.png'))
-        
-        #################################################################################
 
         for deg in degrees:
             hd_overlays = hd_renderer(
@@ -435,7 +396,7 @@ def main(
             )
             out_img[f'hd_rendering_{deg:03.0f}'] = hd_overlays
 
-        if not save_vis:
+        if save_vis:
             for key in out_img.keys():
                 out_img[key] = np.clip(
                     np.transpose(
@@ -447,7 +408,7 @@ def main(
             curr_out_path = osp.join(demo_output_folder, fname)
             os.makedirs(curr_out_path, exist_ok=True)
 
-            if not save_vis:
+            if save_vis:
                 for name, curr_img in out_img.items():
                     pil_img.fromarray(curr_img[idx]).save(
                         osp.join(curr_out_path, f'{name}.png'))
@@ -497,7 +458,7 @@ def main(
                     ax.set_axis_off()
 
                 axes[0, 0].imshow(hd_imgs[idx])
-                axes[0, 1].imshow(out_img['my_mesh'][idx])
+                axes[0, 1].imshow(out_img['rgb'][idx])
                 axes[0, 2].imshow(out_img['hd_orig_overlay'][idx])
                 axes[0, 3].imshow(out_img['hd_overlay'][idx])
                 start = 4
