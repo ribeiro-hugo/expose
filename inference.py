@@ -277,10 +277,10 @@ def main(
             )
             out_img['hd_overlay'] = hd_overlays
 
-#####################################                
+        #####################################                
         #Render HD overlay sem o background
         if render:
-            hd_overlays = hd_renderer(
+            hd_overlay_noBG = hd_renderer(
                 final_model_vertices,
                 faces,
                 focal_length=hd_params['focal_length_in_px'],
@@ -291,9 +291,9 @@ def main(
                 return_with_alpha=True,
                 body_color=[0.4, 0.4, 0.7]
             )
-            out_img['hd_overlay_noBG'] = hd_overlays
+            out_img['hd_overlay_noBG'] = hd_overlay_noBG
                            
-#####################################
+        #####################################
                 
         for deg in degrees:
             hd_overlays = hd_renderer(
