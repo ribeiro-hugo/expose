@@ -475,12 +475,22 @@ class AbstractRenderer(object):
             metallicFactor=0.0,
             alphaMode='BLEND',
             baseColorFactor=color)
+        
+        
+        
+        ##########################################################################
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        vertex_colors = np.loadtxt(os.path.join(script_dir, 'smplx_verts_colors.txt'))
 
-        mesh = self.mesh_constructor(vertices, faces, process=False)
-
+        mesh = self.mesh_constructor(vertices=vertices, faces=faces, vertex_colors=vertex_colors, process=False)
         curr_vertices = vertices.copy()
-        mesh = self.mesh_constructor(
-            curr_vertices, faces, process=False)
+        mesh = self.mesh_constructor(vertices=curr_vertices, faces=faces, vertex_colors=vertex_colors, process=False)
+        ##########################################################################
+
+#         mesh = self.mesh_constructor(vertices, faces, process=False)
+#         curr_vertices = vertices.copy()
+#         mesh = self.mesh_constructor(curr_vertices, faces, process=False)
+
         if deg != 0:
             rot = self.transf(
                 np.radians(deg), [0, 1, 0],
@@ -490,7 +500,8 @@ class AbstractRenderer(object):
         rot = self.transf(np.radians(180), [1, 0, 0])
         mesh.apply_transform(rot)
 
-        return self.trimesh_to_pymesh(mesh, material=material)
+        #return self.trimesh_to_pymesh(mesh, material=material)
+        return self.trimesh_to_pymesh(mesh, smooth=False, wireframe=False)
 
     def update_mesh(self, vertices, faces, body_color=(1.0, 1.0, 1.0, 1.0),
                     deg=0):
