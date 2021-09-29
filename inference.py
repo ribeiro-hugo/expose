@@ -292,17 +292,7 @@ def main(
                 body_color=[0.4, 0.4, 0.7]
             )
             out_img['hd_overlay_noBG'] = hd_overlays
-                
-            my_overlays = my_renderer(
-                  final_model_vertices,
-                  faces,
-                  focal_length=hd_params['focal_length_in_px'],
-                  camera_translation=hd_params['transl'],
-                  camera_center=hd_params['center'],
-                  bg_imgs=bg_hd_imgs,
-            )
-            my_out_img['my_overlay'] = my_overlays
-                
+                           
 #####################################
                 
         for deg in degrees:
